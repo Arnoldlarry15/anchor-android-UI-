@@ -29,7 +29,14 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application),
     private val _cardStyle = MutableStateFlow(sharedPrefs.getString("card_style", "Filled") ?: "Filled")
     val cardStyle: StateFlow<String> = _cardStyle
 
-    private val _aiModel = MutableStateFlow(sharedPrefs.getString("ai_model", "gemini-1.5-flash") ?: "gemini-1.5-flash")
+    private val _aiModel: MutableStateFlow<String> = run {
+        var model = sharedPrefs.getString("ai_model", "gemini-3.5-flash") ?: "gemini-3.5-flash"
+        if (model.contains("1.5") || model == "gemini-1.5-flash" || model == "gemini-1.5-pro") {
+            model = "gemini-3.5-flash"
+            sharedPrefs.edit().putString("ai_model", model).apply()
+        }
+        MutableStateFlow(model)
+    }
     val aiModel: StateFlow<String> = _aiModel
 
     private var tts: TextToSpeech? = null
@@ -116,8 +123,30 @@ class AnchorViewModel(application: Application) : AndroidViewModel(application),
                     val result = GeminiRetrofitClient.service.generateContent(_aiModel.value, apiKey, request)
                     result.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "No response from core."
                 }
+            } catch (e: retrofit2.HttpException) {
+                val errorCode = e.code()
+                val errorBody = try {
+                    e.response()?.errorBody()?.string()
+                } catch (ex: Exception) {
+                    null
+                }
+                val serverMsg = if (!errorBody.isNullOrBlank()) {
+                    "\nServer details: $errorBody"
+                } else {
+                    ""
+                }
+                
+                if (errorCode == 429) {
+                    "Error communicating with anchor core - HTTP 429 (Rate Limit Exceeded). Your Gemini API key has exceeded its rate limit or free quota. Please wait a minute, use a paid Gemini tier, or try switching back to Gemini 3.5 Flash inside Settings.$serverMsg"
+                } else if (errorCode == 404) {
+                    "Error communicating with anchor core - HTTP 404 (Model Not Found / Path Not Found). The selected model (${_aiModel.value}) might be unsupported under your API key's tier, or the API endpoint is unavailable. Please ensure you are using Gemini 3.5 Flash or Gemini 3.1 Pro.$serverMsg"
+                } else if (errorCode == 400) {
+                    "Error communicating with anchor core - HTTP 400 (Bad Request). Check if the selected model (${_aiModel.value}) is supported by your API key, or switch to Gemini 3.5 Flash in Settings.$serverMsg"
+                } else {
+                    "Error communicating with anchor core: HTTP $errorCode (${e.message()}).$serverMsg"
+                }
             } catch (e: Exception) {
-                "Error communicating with anchor core: ${e.localizedMessage}"
+                "Error communicating with anchor core: ${e.localizedMessage ?: "Unknown connection error"}"
             }
             
             // Try to parse JSON from the response to see if we should create a task

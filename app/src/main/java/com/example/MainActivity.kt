@@ -121,7 +121,6 @@ fun AnchorAssistantScreen(viewModel: AnchorViewModel = viewModel()) {
         .fillMaxSize()
         .padding(innerPadding)
         .padding(horizontal = 20.dp)
-        .alpha(alphaAnim)
     ) {
       Spacer(modifier = Modifier.height(16.dp))
 
@@ -197,82 +196,86 @@ fun AnchorAssistantScreen(viewModel: AnchorViewModel = viewModel()) {
 
       Spacer(modifier = Modifier.height(32.dp))
 
-      LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 80.dp)
-      ) {
-        if (isThinking) {
-          item {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), color = MaterialTheme.colorScheme.primary)
-          }
-        }
-        
-        if (assistantMessage != null) {
-          item {
-            Card(
-              shape = RoundedCornerShape(16.dp),
-              modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-              colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-              border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
-            ) {
-              Text(
-                text = assistantMessage!!,
-                modifier = Modifier.padding(16.dp),
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.bodyLarge
-              )
+      if (isOnline) {
+        LazyColumn(
+          modifier = Modifier.fillMaxSize(),
+          contentPadding = PaddingValues(bottom = 80.dp)
+        ) {
+          if (isThinking) {
+            item {
+              LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), color = MaterialTheme.colorScheme.primary)
             }
           }
-        }
+          
+          if (assistantMessage != null) {
+            item {
+              Card(
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+              ) {
+                Text(
+                  text = assistantMessage!!,
+                  modifier = Modifier.padding(16.dp),
+                  color = MaterialTheme.colorScheme.onSurface,
+                  style = MaterialTheme.typography.bodyLarge
+                )
+              }
+            }
+          }
 
-        if (pendingTasks.isNotEmpty()) {
+          if (pendingTasks.isNotEmpty()) {
+            item {
+              Text(
+                text = "AWAITING APPROVAL",
+                style = MaterialTheme.typography.labelMedium.copy(
+                  fontWeight = FontWeight.SemiBold,
+                  color = MaterialTheme.colorScheme.primary,
+                  letterSpacing = 1.sp
+                )
+              )
+              Spacer(modifier = Modifier.height(16.dp))
+            }
+            
+            items(pendingTasks) { task ->
+              ApprovalCard(
+                task = task,
+                cardStyle = cardStyle,
+                onApprove = { viewModel.approveTask(task.id) },
+                onDecline = { viewModel.declineTask(task.id) }
+              )
+              Spacer(modifier = Modifier.height(listSpacing))
+            }
+            
+            item { Spacer(modifier = Modifier.height(24.dp)) }
+          }
+
           item {
             Text(
-              text = "AWAITING APPROVAL",
+              text = "RECENT AUTOMATIONS",
               style = MaterialTheme.typography.labelMedium.copy(
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 letterSpacing = 1.sp
               )
             )
             Spacer(modifier = Modifier.height(16.dp))
           }
-          
-          items(pendingTasks) { task ->
-            ApprovalCard(
-              task = task,
-              cardStyle = cardStyle,
-              onApprove = { viewModel.approveTask(task.id) },
-              onDecline = { viewModel.declineTask(task.id) }
-            )
+
+          items(recentTasks) { task ->
+            LogCard(task, cardStyle)
             Spacer(modifier = Modifier.height(listSpacing))
           }
-          
-          item { Spacer(modifier = Modifier.height(24.dp)) }
-        }
 
-        item {
-          Text(
-            text = "RECENT AUTOMATIONS",
-            style = MaterialTheme.typography.labelMedium.copy(
-              fontWeight = FontWeight.SemiBold,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              letterSpacing = 1.sp
-            )
-          )
-          Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        items(recentTasks) { task ->
-          LogCard(task, cardStyle)
-          Spacer(modifier = Modifier.height(listSpacing))
-        }
-
-        item {
-          TextButton(onClick = { showFullHistory = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("View All History Logs")
+          item {
+            TextButton(onClick = { showFullHistory = true }, modifier = Modifier.fillMaxWidth()) {
+              Text("View All History Logs")
+            }
           }
         }
+      } else {
+        StandbyCoreScreen(onActivate = { isOnline = true })
       }
     }
   }
@@ -296,8 +299,8 @@ fun AnchorAssistantScreen(viewModel: AnchorViewModel = viewModel()) {
         Text("AI Model", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-          val models = listOf("gemini-1.5-flash", "gemini-3.1-pro-preview")
-          val labels = listOf("1.5 Flash (Fast)", "3.1 Pro (Advanced)")
+          val models = listOf("gemini-3.5-flash", "gemini-3.1-pro-preview")
+          val labels = listOf("3.5 Flash (Fast)", "3.1 Pro (Advanced)")
           models.forEachIndexed { index, modelName ->
             OutlinedButton(
               onClick = { 
@@ -552,6 +555,85 @@ fun LogCard(task: TaskEntity, cardStyle: String) {
         Text(
           text = task.title,
           style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
+        )
+      }
+    }
+  }
+}
+
+@Composable
+fun StandbyCoreScreen(onActivate: () -> Unit) {
+  Box(
+    modifier = Modifier
+      .fillMaxSize()
+      .padding(24.dp),
+    contentAlignment = Alignment.Center
+  ) {
+    Column(
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.Center
+    ) {
+      // Sleek security shield / core icon
+      Box(
+        modifier = Modifier
+          .size(120.dp)
+          .clip(CircleShape)
+          .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f))
+          .border(2.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f), CircleShape),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = Icons.Default.Shield,
+          contentDescription = "Core Locked",
+          tint = MaterialTheme.colorScheme.error,
+          modifier = Modifier.size(56.dp)
+        )
+      }
+      
+      Spacer(modifier = Modifier.height(32.dp))
+      
+      Text(
+        text = "ANCHOR CORE STANDBY",
+        style = MaterialTheme.typography.titleLarge.copy(
+          fontWeight = FontWeight.Bold,
+          letterSpacing = 2.sp,
+          color = MaterialTheme.colorScheme.onSurface
+        )
+      )
+      
+      Spacer(modifier = Modifier.height(12.dp))
+      
+      Text(
+        text = "The cognitive automation core represents a secure sandbox environment. Hitting the kill switch temporarily deactivates live API triggers and holds tasks locally.",
+        modifier = Modifier.padding(horizontal = 16.dp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodyMedium.copy(
+          lineHeight = 22.sp
+        ),
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+      )
+      
+      Spacer(modifier = Modifier.height(40.dp))
+      
+      Button(
+        onClick = onActivate,
+        colors = ButtonDefaults.buttonColors(
+          containerColor = MaterialTheme.colorScheme.primary,
+          contentColor = MaterialTheme.colorScheme.onPrimary
+        ),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(56.dp)
+      ) {
+        Icon(Icons.Default.PowerSettingsNew, contentDescription = null)
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+          text = "REACTIVATE SECURE CORE",
+          style = MaterialTheme.typography.labelLarge.copy(
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+          )
         )
       }
     }
