@@ -15,9 +15,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val DarkColorScheme =
-  darkColorScheme(
-    primary = PrimaryCyan,
+private fun getDarkColorScheme(colorName: String) = darkColorScheme(
+    primary = when (colorName) {
+        "Cyan" -> PrimaryCyan
+        "Violet" -> PrimaryViolet
+        "Emerald" -> PrimaryEmerald
+        "Crimson" -> PrimaryCrimson
+        "Amber" -> PrimaryAmber
+        else -> PrimaryCyan
+    },
     secondary = PrimaryViolet,
     tertiary = SuccessGreen,
     background = DarkBackground,
@@ -30,15 +36,14 @@ private val DarkColorScheme =
     surfaceVariant = CardSurface,
     onSurfaceVariant = TextSecondary,
     error = KillSwitchRed
-  )
+)
 
 @Composable
 fun MyApplicationTheme(
-  darkTheme: Boolean = true, // Force dark theme
-  dynamicColor: Boolean = false, // Disable dynamic colors for exact brand matching
+  themeColor: String = "Cyan",
   content: @Composable () -> Unit,
 ) {
-  val colorScheme = DarkColorScheme
+  val colorScheme = getDarkColorScheme(themeColor)
   
   val view = LocalView.current
   if (!view.isInEditMode) {

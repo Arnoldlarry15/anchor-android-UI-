@@ -39,8 +39,10 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
     setContent {
-      MyApplicationTheme {
-        AnchorAssistantScreen()
+      val viewModel: AnchorViewModel = viewModel()
+      val themeColor by viewModel.themeColor.collectAsState()
+      MyApplicationTheme(themeColor = themeColor) {
+        AnchorAssistantScreen(viewModel)
       }
     }
   }
@@ -53,12 +55,20 @@ class MainActivity : ComponentActivity() {
 fun AnchorAssistantScreen(viewModel: AnchorViewModel = viewModel()) {
   var isOnline by remember { mutableStateOf(true) }
   var commandText by remember { mutableStateOf("") }
+  var showSettings by remember { mutableStateOf(false) }
+  var showFullHistory by remember { mutableStateOf(false) }
   
   val isThinking by viewModel.isThinking.collectAsState()
   val assistantMessage by viewModel.assistantMessage.collectAsState()
 
+  val themeColor by viewModel.themeColor.collectAsState()
+  val layoutDensity by viewModel.layoutDensity.collectAsState()
+  val cardStyle by viewModel.cardStyle.collectAsState()
+  val listSpacing = if (layoutDensity == "Compact") 8.dp else 16.dp
+
   val pendingTasks by viewModel.pendingTasks.collectAsState()
   val recentTasks by viewModel.recentTasks.collectAsState()
+  val allTasks by viewModel.allTasks.collectAsState()
 
   val alphaAnim by animateFloatAsState(
     targetValue = if (isOnline) 1f else 0.4f,
@@ -158,21 +168,30 @@ fun AnchorAssistantScreen(viewModel: AnchorViewModel = viewModel()) {
         }
         
         // Kill Switch Button
-        Button(
-          onClick = { isOnline = !isOnline },
-          colors = ButtonDefaults.buttonColors(
-            containerColor = if (isOnline) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant,
-          ),
-          shape = RoundedCornerShape(12.dp),
-          modifier = Modifier.height(48.dp)
-        ) {
-          Icon(
-            if (isOnline) Icons.Default.PowerSettingsNew else Icons.Default.PlayArrow,
-            contentDescription = "Toggle anchor",
-            modifier = Modifier.size(20.dp)
-          )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          IconButton(
+            onClick = { showSettings = true },
+            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+          ) {
+            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
+          }
           Spacer(modifier = Modifier.width(8.dp))
-          Text(if (isOnline) "KILL SWITCH" else "ACTIVATE", fontWeight = FontWeight.Bold)
+          Button(
+            onClick = { isOnline = !isOnline },
+            colors = ButtonDefaults.buttonColors(
+              containerColor = if (isOnline) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant,
+            ),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.height(48.dp)
+          ) {
+            Icon(
+              if (isOnline) Icons.Default.PowerSettingsNew else Icons.Default.PlayArrow,
+              contentDescription = "Toggle anchor",
+              modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(if (isOnline) "KILL" else "ACTIVATE", fontWeight = FontWeight.Bold)
+          }
         }
       }
 
@@ -222,10 +241,11 @@ fun AnchorAssistantScreen(viewModel: AnchorViewModel = viewModel()) {
           items(pendingTasks) { task ->
             ApprovalCard(
               task = task,
+              cardStyle = cardStyle,
               onApprove = { viewModel.approveTask(task.id) },
               onDecline = { viewModel.declineTask(task.id) }
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(listSpacing))
           }
           
           item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -244,8 +264,159 @@ fun AnchorAssistantScreen(viewModel: AnchorViewModel = viewModel()) {
         }
 
         items(recentTasks) { task ->
-          LogCard(task)
-          Spacer(modifier = Modifier.height(12.dp))
+          LogCard(task, cardStyle)
+          Spacer(modifier = Modifier.height(listSpacing))
+        }
+
+        item {
+          TextButton(onClick = { showFullHistory = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("View All History Logs")
+          }
+        }
+      }
+    }
+  }
+
+  if (showSettings) {
+    var aiModel by remember { mutableStateOf(viewModel.aiModel.value) }
+
+    ModalBottomSheet(
+      onDismissRequest = { showSettings = false },
+      containerColor = MaterialTheme.colorScheme.surface
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 24.dp)
+          .padding(bottom = 40.dp)
+      ) {
+        Text("DASHBOARD SETUP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Text("AI Model", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+          val models = listOf("gemini-1.5-flash", "gemini-3.1-pro-preview")
+          val labels = listOf("1.5 Flash (Fast)", "3.1 Pro (Advanced)")
+          models.forEachIndexed { index, modelName ->
+            OutlinedButton(
+              onClick = { 
+                viewModel.setAiModel(modelName)
+                aiModel = modelName
+              },
+              colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = if (aiModel == modelName) MaterialTheme.colorScheme.primary.copy(alpha=0.1f) else Color.Transparent,
+                contentColor = if (aiModel == modelName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+              ),
+              border = androidx.compose.foundation.BorderStroke(1.dp, if (aiModel == modelName) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.5f))
+            ) {
+              Text(labels[index])
+            }
+          }
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Text("Theme Color", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+          val colors = listOf("Cyan", "Violet", "Emerald", "Crimson", "Amber")
+          colors.forEach { colorName ->
+            val colorVal = when (colorName) {
+              "Cyan" -> com.example.ui.theme.PrimaryCyan
+              "Violet" -> com.example.ui.theme.PrimaryViolet
+              "Emerald" -> com.example.ui.theme.PrimaryEmerald
+              "Crimson" -> com.example.ui.theme.PrimaryCrimson
+              "Amber" -> com.example.ui.theme.PrimaryAmber
+              else -> com.example.ui.theme.PrimaryCyan
+            }
+            Box(
+              modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(colorVal)
+                .border(2.dp, if (themeColor == colorName) MaterialTheme.colorScheme.onSurface else Color.Transparent, CircleShape)
+                .clickable { viewModel.setThemeColor(colorName) }
+            )
+          }
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        Text("Layout Density", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+          val densities = listOf("Compact", "Spacious")
+          densities.forEach { density ->
+            OutlinedButton(
+              onClick = { viewModel.setLayoutDensity(density) },
+              colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = if (layoutDensity == density) MaterialTheme.colorScheme.primary.copy(alpha=0.1f) else Color.Transparent,
+                contentColor = if (layoutDensity == density) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+              ),
+              border = androidx.compose.foundation.BorderStroke(1.dp, if (layoutDensity == density) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.5f))
+            ) {
+              Text(density)
+            }
+          }
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        Text("Card Style", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+          val styles = listOf("Filled", "Outlined")
+          styles.forEach { style ->
+            OutlinedButton(
+              onClick = { viewModel.setCardStyle(style) },
+              colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = if (cardStyle == style) MaterialTheme.colorScheme.primary.copy(alpha=0.1f) else Color.Transparent,
+                contentColor = if (cardStyle == style) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+              ),
+              border = androidx.compose.foundation.BorderStroke(1.dp, if (cardStyle == style) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.5f))
+            ) {
+              Text(style)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (showFullHistory) {
+    ModalBottomSheet(
+      onDismissRequest = { showFullHistory = false },
+      containerColor = MaterialTheme.colorScheme.surface
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 24.dp)
+          .padding(bottom = 24.dp)
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+          Spacer(modifier = Modifier.width(12.dp))
+          Text("INFINITE TASK HISTORY", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        LazyColumn(
+          modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+          contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+          items(allTasks) { task ->
+            LogCard(task, cardStyle)
+            Spacer(modifier = Modifier.height(listSpacing))
+          }
+          if (allTasks.isEmpty()) {
+            item {
+              Box(modifier = Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+                Text("No automation logs found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+            }
+          }
         }
       }
     }
@@ -253,14 +424,20 @@ fun AnchorAssistantScreen(viewModel: AnchorViewModel = viewModel()) {
 }
 
 @Composable
-fun ApprovalCard(task: TaskEntity, onApprove: () -> Unit, onDecline: () -> Unit) {
+fun ApprovalCard(task: TaskEntity, cardStyle: String, onApprove: () -> Unit, onDecline: () -> Unit) {
   Card(
     shape = RoundedCornerShape(16.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    colors = CardDefaults.cardColors(
+      containerColor = if (cardStyle == "Filled") MaterialTheme.colorScheme.surface else Color.Transparent
+    ),
     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     modifier = Modifier
       .fillMaxWidth()
-      .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+      .border(
+        1.dp, 
+        if (cardStyle == "Outlined") MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), 
+        RoundedCornerShape(16.dp)
+      )
   ) {
     Column(modifier = Modifier.padding(16.dp)) {
       Row(
@@ -330,11 +507,20 @@ fun ApprovalCard(task: TaskEntity, onApprove: () -> Unit, onDecline: () -> Unit)
 }
 
 @Composable
-fun LogCard(task: TaskEntity) {
+fun LogCard(task: TaskEntity, cardStyle: String) {
   Card(
     shape = RoundedCornerShape(16.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f)),
-    modifier = Modifier.fillMaxWidth()
+    colors = CardDefaults.cardColors(
+      containerColor = if (cardStyle == "Filled") MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f) else Color.Transparent
+    ),
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    modifier = Modifier
+      .fillMaxWidth()
+      .border(
+        if (cardStyle == "Outlined") 1.dp else 0.dp, 
+        if (cardStyle == "Outlined") MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else Color.Transparent, 
+        RoundedCornerShape(16.dp)
+      )
   ) {
     Row(
       modifier = Modifier.padding(16.dp),

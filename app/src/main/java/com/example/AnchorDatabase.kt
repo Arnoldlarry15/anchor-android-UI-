@@ -17,8 +17,11 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE isPendingApproval = 1")
     fun getPendingTasks(): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM tasks WHERE isPendingApproval = 0 ORDER BY id DESC LIMIT 5")
+    fun getRecentCompletedTasks(): Flow<List<TaskEntity>>
+
     @Query("SELECT * FROM tasks WHERE isPendingApproval = 0 ORDER BY id DESC")
-    fun getCompletedTasks(): Flow<List<TaskEntity>>
+    fun getAllCompletedTasks(): Flow<List<TaskEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTask(task: TaskEntity)
@@ -56,7 +59,8 @@ abstract class AppDatabase : RoomDatabase() {
 
 class TaskRepository(private val taskDao: TaskDao) {
     val pendingTasks: Flow<List<TaskEntity>> = taskDao.getPendingTasks()
-    val completedTasks: Flow<List<TaskEntity>> = taskDao.getCompletedTasks()
+    val recentCompletedTasks: Flow<List<TaskEntity>> = taskDao.getRecentCompletedTasks()
+    val allCompletedTasks: Flow<List<TaskEntity>> = taskDao.getAllCompletedTasks()
 
     suspend fun insert(task: TaskEntity) = taskDao.insertTask(task)
     suspend fun approveTask(id: Int) = taskDao.approveTask(id)
